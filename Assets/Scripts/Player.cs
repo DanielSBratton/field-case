@@ -14,8 +14,7 @@ public class Player : MonoBehaviour
 
     Vector2 direction;
     public int noise = 0;
-
-    
+    bool alive = true;
 
     // Get Components
     void Start()
@@ -27,44 +26,54 @@ public class Player : MonoBehaviour
     // Analyze input, move player, and check for noise sources
     void FixedUpdate()
     {
-        // Movement handling
-        InputRead();
-        rb.MovePosition(rb.position + (direction * 0.5f * Time.deltaTime));
-
-        // Noise handling
-        if (direction != Vector2.zero)
+        // Processes only if player is alive
+        if (alive)
         {
-            // Check for overlap with noisy objects
-            List<Collider2D> results = new List<Collider2D>();
-            int hits = coll.Overlap(new ContactFilter2D
-            {
-                layerMask = LayerMask.GetMask("Noisy"),
-                useLayerMask = true,
-                useTriggers = true
-            }, results);
+            // Movement handling
+            InputRead();
+            rb.MovePosition(rb.position + (direction * 0.5f * Time.deltaTime));
 
-            noise = 0; // Reset noise
-
-            // Determine noise level based on tag of object overlapped
-            foreach (var hit in results)
+            // Noise handling
+            if (direction != Vector2.zero)
             {
-                switch (hit.gameObject.tag)
+                // Check for overlap with noisy objects
+                List<Collider2D> results = new List<Collider2D>();
+                int hits = coll.Overlap(new ContactFilter2D
                 {
-                    case "Alert1":
-                        noise = 5;
-                        break;
-                    case "Alert2":
-                        noise = 6;
-                        break;
-                    case "Alert3":
-                        noise = 7;
-                        break;
-                    default:
-                        noise = 0;
-                        break;
+                    layerMask = LayerMask.GetMask("Noisy"),
+                    useLayerMask = true,
+                    useTriggers = true
+                }, results);
+
+                noise = 0; // Reset noise
+
+                // Determine noise level based on tag of object overlapped
+                foreach (var hit in results)
+                {
+                    noiseSource = hit;
+                    switch (hit.gameObject.tag)
+                    {
+                        case "Alert1":
+                            noise = 5;
+                            break;
+                        case "Alert2":
+                            noise = 6;
+                            break;
+                        case "Alert3":
+                            noise = 7;
+                            break;
+                        default:
+                            noise = 0;
+                            break;
+                    }
+                    break; // Only consider the first noisy object
                 }
+                enemy.Noise(rb.position, noise); // Notify enemy of noise
             }
-            enemy.Noise(rb.position, noise); // Notify enemy of noise
+        }
+        else
+        {
+            direction = Vector2.zero; // Stop movement if dead
         }
     }
 
@@ -108,6 +117,17 @@ public class Player : MonoBehaviour
         if (Mathf.Abs(direction.y) > 0)
         {
             direction.y -= 0.25f * Mathf.Sign(direction.y);
+        } 
+    }
+
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Trigger death on collision with enemy
+        if (collision.gameObject.layer == LayerMask.NameToLayer("Enemy"))
+        {
+            direction = Vector2.zero;
+            alive = false;
+            Debug.Log("Player has died.");
         }
     }
 }
