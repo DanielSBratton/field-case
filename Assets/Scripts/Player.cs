@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 public class Player : MonoBehaviour
 {
@@ -11,14 +12,21 @@ public class Player : MonoBehaviour
 
     Collider2D noiseSource;
     public Enemy enemy;
+    public GameObject canvas;
 
     Vector2 direction;
-    public int noise = 0;
-    bool alive = true;
+    public int volume = 0;
+
+    public enum playState { start, alive, dead, finish }
+    public playState currentState = playState.start;
+    public float stateStartTime = Time.time;
+
+    public AudioClip LoudSound;
 
     // Get Components
     void Start()
     {
+        stateStartTime = Time.time;
         rb = GetComponent<Rigidbody2D>();
         coll = GetComponent<Collider2D>();
     }
@@ -26,54 +34,93 @@ public class Player : MonoBehaviour
     // Analyze input, move player, and check for noise sources
     void FixedUpdate()
     {
-        // Processes only if player is alive
-        if (alive)
+        switch (currentState)
         {
-            // Movement handling
-            InputRead();
-            rb.MovePosition(rb.position + (direction * 0.5f * Time.deltaTime));
-
-            // Noise handling
-            if (direction != Vector2.zero)
-            {
-                // Check for overlap with noisy objects
-                List<Collider2D> results = new List<Collider2D>();
-                int hits = coll.Overlap(new ContactFilter2D
+            // Starting screen logic - waiting for input to start game
+            case playState.start:
+                if (Keyboard.current.anyKey.IsActuated() && Time.time - stateStartTime > 1f)
                 {
-                    layerMask = LayerMask.GetMask("Noisy"),
-                    useLayerMask = true,
-                    useTriggers = true
-                }, results);
-
-                noise = 0; // Reset noise
-
-                // Determine noise level based on tag of object overlapped
-                foreach (var hit in results)
-                {
-                    noiseSource = hit;
-                    switch (hit.gameObject.tag)
-                    {
-                        case "Alert1":
-                            noise = 5;
-                            break;
-                        case "Alert2":
-                            noise = 6;
-                            break;
-                        case "Alert3":
-                            noise = 7;
-                            break;
-                        default:
-                            noise = 0;
-                            break;
-                    }
-                    break; // Only consider the first noisy object
+                    canvas.transform.GetChild(3).gameObject.SetActive(false); // Hide start screen
+                    currentState = playState.alive;
                 }
-                enemy.Noise(rb.position, noise); // Notify enemy of noise
-            }
-        }
-        else
-        {
-            direction = Vector2.zero; // Stop movement if dead
+                break;
+
+            // Normal gameplay state
+            case playState.alive:
+                // Movement handling
+                InputRead();
+                rb.MovePosition(rb.position + (direction * 0.5f * Time.deltaTime));
+
+                // Noise handling
+                if (direction != Vector2.zero)
+                {
+                    // Check for overlap with noisy objects
+                    List<Collider2D> results = new List<Collider2D>();
+                    int hits = coll.Overlap(new ContactFilter2D
+                    {
+                        layerMask = LayerMask.GetMask("Noisy"),
+                        useLayerMask = true,
+                        useTriggers = true
+                    }, results);
+
+                    volume = 0; // Reset volume
+
+                    // Determine noise level based on tag of object overlapped
+                    foreach (var hit in results)
+                    {
+                        noiseSource = hit;
+                        switch (hit.gameObject.tag)
+                        {
+                            case "Alert1":
+                                volume = 20;
+                                if (!this.GetComponent<AudioSource>().isPlaying)
+                                {
+                                    this.GetComponent<AudioSource>().Play();
+                                }
+                                break;
+                            case "Alert2":
+                                volume = 60;
+                                if (!this.GetComponent<AudioSource>().isPlaying)
+                                {
+                                    this.GetComponent<AudioSource>().PlayOneShot(LoudSound);
+                                }
+                                break;
+                            case "Alert3":
+                                volume = 100;
+                                break;
+                            default:
+                                volume = 0;
+                                break;
+                        }
+                        break; // Only consider the first noisy object
+                    }
+                    if (volume > 0)
+                    {
+                        enemy.Noise(rb.position, volume); // Notify enemy of sound
+                    }
+                    else
+                    {
+                        this.GetComponent<AudioSource>().Stop();
+                        volume = 0;
+                    }
+                }
+                else
+                {
+                    this.GetComponent<AudioSource>().Stop();
+                    volume = 0;
+                }
+            break;
+
+            // Player death state - waiting for input to restart
+            case playState.dead:
+                if (Keyboard.current.anyKey.IsActuated() && Time.time - stateStartTime > 1f)
+                {
+                    SceneManager.LoadScene(SceneManager.GetActiveScene().name); // Restart the scene
+                }
+                break;
+            case playState.finish:
+                // Game finished, no movement
+                break;
         }
     }
 
@@ -126,7 +173,9 @@ public class Player : MonoBehaviour
         if (collision.gameObject.layer == LayerMask.NameToLayer("Enemy"))
         {
             direction = Vector2.zero;
-            alive = false;
+            currentState = playState.dead;
+            stateStartTime = Time.time;
+            canvas.transform.GetChild(4).gameObject.SetActive(true); // Show death screen
             Debug.Log("Player has died.");
         }
     }
