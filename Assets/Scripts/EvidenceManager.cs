@@ -5,22 +5,20 @@ public class EvidenceManager : MonoBehaviour
     public GameObject canvas;
     public GameObject enemy;
     public GameObject[] evidenceItems;
+    public Player player;
 
     [SerializeField] int evidenceCollected;
     [SerializeField] bool allEvidenceCollected;
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    public AudioClip collectSound;
 
     // Triggered when player collects an evidence item
     public void CollectEvidence()
     {
-        // Increment the count of collected evidence and update ui
+        // Increment the count of collected evidence, update ui, and play sound
         evidenceCollected++;
         canvas.transform.GetChild(evidenceCollected - 1).gameObject.GetComponent<UnityEngine.UI.Image>().color = Color.white;
+        canvas.GetComponent<AudioSource>().PlayOneShot(collectSound);
 
         // Spawn enemy after collecting 2 pieces of evidence
         if (evidenceCollected == 2)
@@ -41,6 +39,8 @@ public class EvidenceManager : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D collision)
     {
+        player.currentState = Player.playState.finish;
+        canvas.transform.GetChild(5).gameObject.SetActive(true); // Show finish screen
         Debug.Log("Game finished!");
     }
 }
